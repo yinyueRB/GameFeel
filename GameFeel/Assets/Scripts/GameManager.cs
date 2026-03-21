@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
-using TMPro; // 【改动】引入 TextMeshPro 命名空间
+using TMPro; 
+using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
@@ -26,13 +27,20 @@ public class GameManager : MonoBehaviour
     public TextMeshProUGUI killText;      
     public TextMeshProUGUI p1MissText;    
     public TextMeshProUGUI p2MissText;    
-    public AudioSource tickAudio; 
 
+    [Header("Audio Clips (声音文件)")]
+    public AudioClip tickClip;   // 倒计时的声音
+    public AudioClip fightClip;  // 开始Fight的声音
+    public AudioClip killClip;   // 击杀音效
+    
     [Header("结算 UI (左右分屏)")]
     public GameObject settlementPanel;      // 整个结算界面父物体
     public TextMeshProUGUI p1ResultText;    // 左半屏字 (WINNER/LOSER)
     public TextMeshProUGUI p2ResultText;    // 右半屏字 (WINNER/LOSER)
     public TextMeshProUGUI finalScoreText;  // 中央比分字 (2 : 0)
+    
+    [Header("跳转场景")]
+    public string titleSceneName = "Title";
 
     void Awake()
     {
@@ -46,10 +54,19 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        // 如果比赛结束了，按下空格键重新开始一整场三局两胜
-        if (matchIsOver && Input.GetKeyDown(KeyCode.Space))
+        // 如果比赛结束了
+        if (matchIsOver)
         {
-            RestartFullMatch();
+            // 按下空格键，重新开始当前场景（再来一局）
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                RestartFullMatch();
+            }
+            // 按下 ESC 键，返回标题画面
+            else if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                ReturnToTitle();
+            }
         }
     }
 
@@ -67,16 +84,16 @@ public class GameManager : MonoBehaviour
         p2MissText.gameObject.SetActive(false);
         settlementPanel.SetActive(false); // 确保结算界面关闭
         
-        if(tickAudio != null) tickAudio.Play(); 
         for (int i = 3; i > 0; i--)
         {
             countdownText.text = i.ToString();
+            if(tickClip != null) AudioManager.Instance.PlaySFX(tickClip);
             StartCoroutine(PunchScale(countdownText.transform, 1.5f, 0.2f));
             yield return new WaitForSeconds(1f);
         }
 
         countdownText.text = "FIGHT!";
-        if(tickAudio != null) { tickAudio.pitch = 1.5f; }
+        if(fightClip != null) AudioManager.Instance.PlaySFX(fightClip, 1.5f);
         StartCoroutine(PunchScale(countdownText.transform, 2f, 0.3f));
 
         p1.canAct = true;
@@ -84,7 +101,6 @@ public class GameManager : MonoBehaviour
 
         yield return new WaitForSeconds(0.5f);
         countdownText.gameObject.SetActive(false); 
-        if(tickAudio != null) tickAudio.pitch = 1f; 
     }
 
     void ResetRound()
@@ -100,6 +116,8 @@ public class GameManager : MonoBehaviour
     public void OnPlayerKilled(PlayerController loser)
     {
         if (matchIsOver) return; // 防止鞭尸导致重复计分
+        
+        if(killClip != null) AudioManager.Instance.PlaySFX(killClip);
 
         StartCoroutine(HitStopRoutine());
         if (CameraShake.Instance != null) 
@@ -223,5 +241,15 @@ public class GameManager : MonoBehaviour
         Time.timeScale = 0.05f; 
         yield return new WaitForSecondsRealtime(hitStopDuration); 
         Time.timeScale = 1f;    
+    }
+    
+    void ReturnToTitle()
+    {
+        // 恢复时间（防止如果在顿帧期间按了返回，导致下一个场景时间依然是停止的）
+        Time.timeScale = 1f; 
+        
+        // 假设你的标题场景名字叫 "TitleScene"
+        // 你也可以用场景的 Index 数字，比如 SceneManager.LoadScene(0);
+        SceneManager.LoadScene(titleSceneName); 
     }
 }
