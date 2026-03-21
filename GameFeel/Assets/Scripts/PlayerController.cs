@@ -3,6 +3,9 @@ using UnityEngine;
 public class PlayerController : MonoBehaviour
 {
     // === 游戏设计参数 ===
+    [Header("Game Control")]
+    public bool canAct = false; // 控制玩家能否行动的开关
+    
     [Header("Frame Data (时间/秒)")]
     public float shootStartup = 0.3f;
     public float shootRecovery = 0.5f;
@@ -48,7 +51,7 @@ public class PlayerController : MonoBehaviour
         UpdateVisuals(); 
 
         // 如果自己死了，或者对手死了（回合结束），就不再接收输入和处理状态
-        if (currentState == PlayerState.Dead || (opponent != null && opponent.currentState == PlayerState.Dead)) return;
+        if (!canAct || currentState == PlayerState.Dead || (opponent != null && opponent.currentState == PlayerState.Dead)) return;
 
         HandleInput();
         ProcessState();
@@ -174,6 +177,7 @@ public class PlayerController : MonoBehaviour
             {
                 // 超出完美闪避窗口，但依然在无敌帧内，算作普通闪避
                 Debug.Log(gameObject.name + " 闪避成功 (Miss!)");
+                if (GameManager.Instance != null) GameManager.Instance.OnPlayerMiss(this);
             }
         }
         // 2. 如果不在无敌帧，被击中！
@@ -186,6 +190,8 @@ public class PlayerController : MonoBehaviour
     void PerfectDodge()
     {
         Debug.Log("<color=green>" + gameObject.name + " 完美闪避！(Perfect Dodge!)</color>");
+        
+        if (GameManager.Instance != null) GameManager.Instance.OnPlayerMiss(this);
         
         // 完美闪避的巨大收益：直接强制取消接下来的所有后摇，回到Idle，可以立刻拔枪反杀对手！
         currentState = PlayerState.Idle;
@@ -240,5 +246,6 @@ public class PlayerController : MonoBehaviour
         currentAction = ActionType.None;
         stateTimer = 0f;
         bufferedAction = ActionType.None;
+        canAct = false; 
     }
 }
