@@ -43,14 +43,21 @@ public class GameManager : MonoBehaviour
     public Sprite p1LoserSprite;
     public Sprite p2WinnerSprite;
     public Sprite p2LoserSprite;
-    public Image scoreTitleImage;
+    public Image scoreTitleImage;  // 确保这是正确的引用
     public TextMeshProUGUI finalScoreText;
 
-    [Header("动画参数")]
+    [Header("MISS动画参数")]
     [SerializeField] private float missMoveDistance = 200f;
     [SerializeField] private float missTotalDuration = 0.8f;
     [SerializeField] private Vector3 p1MissStartPos;
     [SerializeField] private Vector3 p2MissStartPos;
+
+    [Header("浮动动画参数")]
+    [SerializeField] private float floatAmplitude = 8f;       // 稍微减少浮动幅度
+    [SerializeField] private float floatSpeed = 1.8f;         // 稍微调慢浮动速度
+    [SerializeField] private float scaleAmplitude = 0.05f;    // 大幅减少缩放幅度，更加轻微
+    [SerializeField] private float scaleSpeed = 1.2f;         // 调慢缩放速度
+    [SerializeField] private float startDelay = 0.3f;         // 减少开始延迟
 
     void Awake()
     {
@@ -162,8 +169,40 @@ public class GameManager : MonoBehaviour
             p2ResultImage.sprite = p2WinnerSprite;
         }
 
-        StartCoroutine(PunchScale(p1ResultImage.transform, 1.2f, 0.3f));
-        StartCoroutine(PunchScale(p2ResultImage.transform, 1.2f, 0.3f));
+        // 启动所有UI元素的浮动动画
+        StartAllSettlementAnimations();
+    }
+
+    void StartAllSettlementAnimations()
+    {
+        // 确保所有需要动画的元素都启动动画
+        if (scoreTitleImage != null)
+        {
+            StartCoroutine(FloatAndScaleAnimation(scoreTitleImage.transform));
+            Debug.Log("Score Title Image 动画已启动");
+        }
+        else
+        {
+            Debug.LogWarning("Score Title Image 未分配！请检查Inspector中的引用");
+        }
+
+        if (finalScoreText != null)
+        {
+            StartCoroutine(FloatAndScaleAnimation(finalScoreText.transform));
+            Debug.Log("Final Score Text 动画已启动");
+        }
+
+        if (p1ResultImage != null)
+        {
+            StartCoroutine(FloatAndScaleAnimation(p1ResultImage.transform));
+            Debug.Log("P1 Result Image 动画已启动");
+        }
+
+        if (p2ResultImage != null)
+        {
+            StartCoroutine(FloatAndScaleAnimation(p2ResultImage.transform));
+            Debug.Log("P2 Result Image 动画已启动");
+        }
     }
 
     IEnumerator PunchScale(Transform target, float punchSize, float duration)
@@ -181,9 +220,104 @@ public class GameManager : MonoBehaviour
         target.localScale = originalScale;
     }
 
-    // ============================
-    // ✅ 修改后的 Kill UI
-    // ============================
+    IEnumerator FloatAndScaleAnimation(Transform target)
+    {
+        if (target == null)
+        {
+            Debug.LogWarning("浮动动画目标为空！");
+            yield break;
+        }
+
+        // 记录初始位置和缩放
+        Vector3 originalPosition = target.localPosition;
+        Vector3 originalScale = target.localScale;
+
+        // 记录初始旋转，确保动画不影响原本的旋转
+        Quaternion originalRotation = target.rotation;
+        Vector3 originalEulerAngles = target.eulerAngles;
+
+        // 添加随机相位偏移，让不同元素浮动不同步
+        float timeOffset = Random.Range(0f, 2f * Mathf.PI);
+        float scaleTimeOffset = Random.Range(0f, 2f * Mathf.PI);
+
+        Debug.Log($"启动浮动动画: {target.name}, 原始位置: {originalPosition}, 原始缩放: {originalScale}");
+
+        // 延迟开始
+        yield return new WaitForSeconds(startDelay);
+
+        // 淡入效果
+        if (target.GetComponent<Image>() != null)
+        {
+            Image image = target.GetComponent<Image>();
+            Color originalColor = image.color;
+            Color transparentColor = originalColor;
+            transparentColor.a = 0f;
+
+            float fadeDuration = 0.5f;
+            float fadeElapsed = 0f;
+
+            while (fadeElapsed < fadeDuration)
+            {
+                fadeElapsed += Time.deltaTime;
+                float progress = fadeElapsed / fadeDuration;
+                float alpha = Mathf.Lerp(0f, 1f, progress);
+                image.color = new Color(originalColor.r, originalColor.g, originalColor.b, alpha);
+                yield return null;
+            }
+        }
+        else if (target.GetComponent<TextMeshProUGUI>() != null)
+        {
+            TextMeshProUGUI text = target.GetComponent<TextMeshProUGUI>();
+            Color originalColor = text.color;
+            Color transparentColor = originalColor;
+            transparentColor.a = 0f;
+
+            float fadeDuration = 0.5f;
+            float fadeElapsed = 0f;
+
+            while (fadeElapsed < fadeDuration)
+            {
+                fadeElapsed += Time.deltaTime;
+                float progress = fadeElapsed / fadeDuration;
+                float alpha = Mathf.Lerp(0f, 1f, progress);
+                text.color = new Color(originalColor.r, originalColor.g, originalColor.b, alpha);
+                yield return null;
+            }
+        }
+
+        // 开始浮动循环
+        while (settlementPanel != null && settlementPanel.activeSelf)
+        {
+            float time = Time.time + timeOffset;
+            float scaleTime = Time.time + scaleTimeOffset;
+
+            // 垂直浮动（幅度更小，更轻柔）
+            float floatValue = Mathf.Sin(time * floatSpeed) * floatAmplitude;
+
+            // 使用localPosition确保正确的坐标系
+            target.localPosition = originalPosition + Vector3.up * floatValue;
+
+            // 缩放动画（幅度更小，更轻微）
+            float scaleValue = 1f + Mathf.Sin(scaleTime * scaleSpeed) * scaleAmplitude;
+            target.localScale = originalScale * scaleValue;
+
+            // 轻微旋转（幅度更小）
+            float rotation = Mathf.Sin(time * floatSpeed * 0.3f) * 0.3f;
+            target.rotation = originalRotation * Quaternion.Euler(0f, 0f, rotation);
+
+            yield return null;
+        }
+
+        // 恢复原状
+        if (target != null)
+        {
+            target.localPosition = originalPosition;
+            target.localScale = originalScale;
+            target.rotation = originalRotation;
+            target.eulerAngles = originalEulerAngles;
+        }
+    }
+
     void ShowKillUI()
     {
         killImage.gameObject.SetActive(true);
@@ -282,10 +416,10 @@ public class GameManager : MonoBehaviour
         killImage.transform.localScale = Vector3.one;
         killImage.transform.rotation = Quaternion.identity;
 
-        // ✅ 停顿
+        // 停顿
         yield return new WaitForSeconds(0.3f);
 
-        // ✅ 淡出
+        // 淡出
         yield return StartCoroutine(FadeOutKillImage());
     }
 
@@ -305,7 +439,7 @@ public class GameManager : MonoBehaviour
             c.a = alpha;
             killImage.color = c;
 
-            // 可选：轻微缩小
+            // 轻微缩小
             float scale = Mathf.Lerp(1f, 0.8f, t / fadeDuration);
             killImage.transform.localScale = Vector3.one * scale;
 
@@ -322,8 +456,6 @@ public class GameManager : MonoBehaviour
         killImage.color = c;
         killImage.transform.localScale = Vector3.one;
     }
-
-    // ============================
 
     public void OnPlayerMiss(PlayerController dodger)
     {
