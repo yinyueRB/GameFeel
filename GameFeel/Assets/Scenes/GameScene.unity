@@ -603,12 +603,17 @@ MonoBehaviour:
   p1LoserSprite: {fileID: -1400719707, guid: d4e3b438a844f40438f4a96f04250a81, type: 3}
   p2WinnerSprite: {fileID: -895763368, guid: a071004c1e442b14e829f670efd055f1, type: 3}
   p2LoserSprite: {fileID: -1442502989, guid: 892de0d671aa9de4d8531338321c35da, type: 3}
-  scoreTitleImage: {fileID: 0}
+  scoreTitleImage: {fileID: 943521530}
   finalScoreText: {fileID: 1848008892}
   missMoveDistance: 200
   missTotalDuration: 0.8
   p1MissStartPos: {x: 0, y: 0, z: 0}
   p2MissStartPos: {x: 0, y: 0, z: 0}
+  floatAmplitude: 8
+  floatSpeed: 1.8
+  scaleAmplitude: 0.05
+  scaleSpeed: 1.2
+  startDelay: 0.3
 --- !u!1 &387229644
 GameObject:
   m_ObjectHideFlags: 0
