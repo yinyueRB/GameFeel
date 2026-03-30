@@ -230,7 +230,13 @@ public class PlayerController : MonoBehaviour
         currentAction = ActionType.None;
         
         anim.Play(animDeadName);
-        
+
+        // 调用死亡闪屏效果
+        if (CameraShake.Instance != null)
+        {
+            CameraShake.Instance.DeathEffect(0.4f, 0.25f);
+        }
+
         if (GameManager.Instance != null)
         {
             GameManager.Instance.OnPlayerKilled(this);
