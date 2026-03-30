@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.UI; 
 using TMPro; 
 using UnityEngine.SceneManagement;
 
@@ -19,28 +20,35 @@ public class GameManager : MonoBehaviour
     [Header("Match Info")]
     public int p1Wins = 0;
     public int p2Wins = 0;
-    public int winsNeeded = 2; // 三局两胜
-    private bool matchIsOver = false; // 标记整场比赛是否结束
+    // 【修改】五局三胜，意味着谁先拿到 3 分谁就赢了！
+    public int winsNeeded = 3; 
+    private bool matchIsOver = false; 
 
-    [Header("战斗 UI (TextMeshPro)")]
-    public TextMeshProUGUI countdownText; 
-    public TextMeshProUGUI killText;      
-    public TextMeshProUGUI p1MissText;    
-    public TextMeshProUGUI p2MissText;    
+    [Header("战斗 UI")]
+    public TextMeshProUGUI countdownText; // 依然用来显示 3, 2, 1
+    public Image fightImage;     // 【新增】美术画的 FIGHT 图片
+    public Image killImage;      
+    public Image p1MissImage;    
+    public Image p2MissImage;    
 
-    [Header("Audio Clips (声音文件)")]
-    public AudioClip tickClip;   // 倒计时的声音
-    public AudioClip fightClip;  // 开始Fight的声音
-    public AudioClip killClip;   // 击杀音效
-    
+    [Header("Audio Clips")]
+    public AudioClip tickClip;   
+    public AudioClip fightClip;  
+    public AudioClip killClip;   
+
     [Header("结算 UI (左右分屏)")]
-    public GameObject settlementPanel;      // 整个结算界面父物体
-    public TextMeshProUGUI p1ResultText;    // 左半屏字 (WINNER/LOSER)
-    public TextMeshProUGUI p2ResultText;    // 右半屏字 (WINNER/LOSER)
-    public TextMeshProUGUI finalScoreText;  // 中央比分字 (2 : 0)
+    public GameObject settlementPanel;      
+    public Image p1ResultImage;     
+    public Image p2ResultImage;   
     
-    [Header("跳转场景")]
-    public string titleSceneName = "Title";
+    // 【修改】将P1和P2的胜负图片完全分开
+    public Sprite p1WinnerSprite;   
+    public Sprite p1LoserSprite;    
+    public Sprite p2WinnerSprite;   
+    public Sprite p2LoserSprite;    
+
+    public Image scoreTitleImage;   // 【新增】其实代码里不用它，但可以留个槽位方便管理
+    public TextMeshProUGUI finalScoreText;  
 
     void Awake()
     {
@@ -54,24 +62,15 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        // 如果比赛结束了
         if (matchIsOver)
         {
-            // 按下空格键，重新开始当前场景（再来一局）
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                RestartFullMatch();
-            }
-            // 按下 ESC 键，返回标题画面
-            else if (Input.GetKeyDown(KeyCode.Escape))
-            {
-                ReturnToTitle();
-            }
+            if (Input.GetKeyDown(KeyCode.Space)) RestartFullMatch();
+            else if (Input.GetKeyDown(KeyCode.Escape)) ReturnToTitle();
         }
     }
 
     // ==========================================
-    // 流程控制
+    // 流程控制：倒计时变成图片切换
     // ==========================================
     IEnumerator RoundStartRoutine()
     {
@@ -79,28 +78,36 @@ public class GameManager : MonoBehaviour
         p2.canAct = false;
         
         countdownText.gameObject.SetActive(true);
-        killText.gameObject.SetActive(false);
-        p1MissText.gameObject.SetActive(false);
-        p2MissText.gameObject.SetActive(false);
-        settlementPanel.SetActive(false); // 确保结算界面关闭
-        
+        if (fightImage != null) fightImage.gameObject.SetActive(false); // 确保一开始隐藏FIGHT图片
+        killImage.gameObject.SetActive(false);
+        p1MissImage.gameObject.SetActive(false);
+        p2MissImage.gameObject.SetActive(false);
+        settlementPanel.SetActive(false); 
+
+        // 3, 2, 1 倒计时（使用文字）
         for (int i = 3; i > 0; i--)
         {
             countdownText.text = i.ToString();
-            if(tickClip != null) AudioManager.Instance.PlaySFX(tickClip);
+            if(tickClip != null && AudioManager.Instance != null) AudioManager.Instance.PlaySFX(tickClip); 
             StartCoroutine(PunchScale(countdownText.transform, 1.5f, 0.2f));
             yield return new WaitForSeconds(1f);
         }
 
-        countdownText.text = "FIGHT!";
-        if(fightClip != null) AudioManager.Instance.PlaySFX(fightClip, 1.5f);
-        StartCoroutine(PunchScale(countdownText.transform, 2f, 0.3f));
+        // 【修改】倒计时结束，隐藏文字，弹出 FIGHT 图片！
+        countdownText.gameObject.SetActive(false); 
+        if (fightImage != null)
+        {
+            fightImage.gameObject.SetActive(true);
+            StartCoroutine(PunchScale(fightImage.transform, 2f, 0.3f));
+        }
+
+        if(fightClip != null && AudioManager.Instance != null) AudioManager.Instance.PlaySFX(fightClip, 1.2f); 
 
         p1.canAct = true;
         p2.canAct = true;
 
         yield return new WaitForSeconds(0.5f);
-        countdownText.gameObject.SetActive(false); 
+        if (fightImage != null) fightImage.gameObject.SetActive(false); // 半秒后隐藏 FIGHT 图片
     }
 
     void ResetRound()
@@ -111,69 +118,67 @@ public class GameManager : MonoBehaviour
     }
 
     // ==========================================
-    // 核心判定与结算
+    // 核心判定与延迟结算（解决重叠问题）
     // ==========================================
     public void OnPlayerKilled(PlayerController loser)
     {
-        if (matchIsOver) return; // 防止鞭尸导致重复计分
-        
-        if(killClip != null) AudioManager.Instance.PlaySFX(killClip);
+        if (matchIsOver) return; 
 
         StartCoroutine(HitStopRoutine());
         if (CameraShake.Instance != null) 
             CameraShake.Instance.Shake(shakeDuration, shakeMagnitude);
 
+        if(killClip != null && AudioManager.Instance != null) AudioManager.Instance.PlaySFX(killClip);
+
         ShowKillUI();
 
-        // 计分
         if (loser == p1) p2Wins++;
         else p1Wins++;
 
-        // 检查是否有人赢得了整个系列赛
         if (p1Wins >= winsNeeded || p2Wins >= winsNeeded)
         {
-            Invoke("ShowSettlementScreen", 1.5f); // 留出一点时间欣赏最后一击的击杀画面，1.5秒后弹结算
+            // 【修改核心】：KILL 动画持续 2 秒。
+            // 之前是 1.5 秒弹结算，导致重叠。现在改成 2.5 秒！
+            // 这样能让玩家清楚看到 KILL 消失，停顿 0.5 秒后，结算面板才重磅砸下！
+            Invoke("ShowSettlementScreen", 2.5f); 
         }
         else
         {
-            // 还没分出最终胜负，直接进入下一回合
-            Invoke("ResetRound", 2.5f); 
+            // 如果还没分出最终胜负，下一回合也稍微等久一点点
+            Invoke("ResetRound", 3f); 
         }
     }
 
-    // 呼出最终结算界面
     void ShowSettlementScreen()
     {
         matchIsOver = true;
-        
-        // 锁住玩家
         p1.canAct = false;
         p2.canAct = false;
-
-        // 打开界面
         settlementPanel.SetActive(true);
 
-        // 更新比分
-        finalScoreText.text = $"SCORE\n{p1Wins} : {p2Wins}";
+        // 【修改】因为有了SCORE图片，文本只需要单纯显示数字即可
+        finalScoreText.text = $"{p1Wins} : {p2Wins}";
 
-        // 左右半屏展示酷炫的复古判定
+        // 【修改】分别使用 P1 和 P2 自己专属的美术字图！
         if (p1Wins > p2Wins)
         {
-            p1ResultText.text = "<color=yellow>WINNER!</color>";
-            p2ResultText.text = "<color=grey>LOSER</color>";
+            p1ResultImage.sprite = p1WinnerSprite;
+            p2ResultImage.sprite = p2LoserSprite;
         }
         else
         {
-            p1ResultText.text = "<color=grey>LOSER</color>";
-            p2ResultText.text = "<color=yellow>WINNER!</color>";
+            p1ResultImage.sprite = p1LoserSprite;
+            p2ResultImage.sprite = p2WinnerSprite;
         }
 
-        // 结算画面做个猛烈的震动/跳动增强复古冲击感
-        StartCoroutine(PunchScale(p1ResultText.transform, 1.2f, 0.3f));
-        StartCoroutine(PunchScale(p2ResultText.transform, 1.2f, 0.3f));
+        StartCoroutine(PunchScale(p1ResultImage.transform, 1.2f, 0.3f));
+        StartCoroutine(PunchScale(p2ResultImage.transform, 1.2f, 0.3f));
     }
 
-    // 重新开启全新的三局两胜比赛
+    // ==========================================
+    // 工具库
+    // ==========================================
+    // 重新开启全新的比赛
     void RestartFullMatch()
     {
         matchIsOver = false;
@@ -182,24 +187,28 @@ public class GameManager : MonoBehaviour
         ResetRound();
     }
 
-    public void OnPlayerMiss(PlayerController dodger)
+    void ReturnToTitle()
     {
-        if (dodger == p1) StartCoroutine(FloatAndFade(p1MissText));
-        else StartCoroutine(FloatAndFade(p2MissText));
+        Time.timeScale = 1f; 
+        SceneManager.LoadScene("Title"); 
     }
 
-    // ==========================================
-    // 动画工具库
-    // ==========================================
+    public void OnPlayerMiss(PlayerController dodger)
+    {
+        if (dodger == p1) StartCoroutine(FloatAndFade(p1MissImage));
+        else StartCoroutine(FloatAndFade(p2MissImage));
+    }
+
     void ShowKillUI()
     {
-        killText.gameObject.SetActive(true);
-        killText.transform.localScale = Vector3.one * 5f; 
-        StartCoroutine(PunchScale(killText.transform, 1f, 0.1f));
+        killImage.gameObject.SetActive(true);
+        killImage.transform.localScale = Vector3.one * 5f; 
+        StartCoroutine(PunchScale(killImage.transform, 1f, 0.1f));
+        // KILL UI 存在 2 秒钟
         Invoke("HideKillUI", 2f);
     }
 
-    void HideKillUI() { killText.gameObject.SetActive(false); }
+    void HideKillUI() { killImage.gameObject.SetActive(false); }
 
     IEnumerator PunchScale(Transform target, float punchSize, float duration)
     {
@@ -216,24 +225,22 @@ public class GameManager : MonoBehaviour
         target.localScale = originalScale;
     }
 
-    IEnumerator FloatAndFade(TextMeshProUGUI uiText) // 【改动】参数类型改为 TMP
+    IEnumerator FloatAndFade(Image uiImage) 
     {
-        uiText.gameObject.SetActive(true);
-        uiText.text = "MISS";
-        Vector3 startPos = uiText.transform.position;
-        
+        uiImage.gameObject.SetActive(true);
+        Vector3 startPos = uiImage.transform.position;
         float elapsed = 0f;
         float duration = 0.5f;
 
         while (elapsed < duration)
         {
-            uiText.transform.position = startPos + Vector3.up * (elapsed * 100f);
+            uiImage.transform.position = startPos + Vector3.up * (elapsed * 100f);
             elapsed += Time.deltaTime;
             yield return null;
         }
 
-        uiText.gameObject.SetActive(false);
-        uiText.transform.position = startPos; 
+        uiImage.gameObject.SetActive(false);
+        uiImage.transform.position = startPos; 
     }
 
     IEnumerator HitStopRoutine()
@@ -241,15 +248,5 @@ public class GameManager : MonoBehaviour
         Time.timeScale = 0.05f; 
         yield return new WaitForSecondsRealtime(hitStopDuration); 
         Time.timeScale = 1f;    
-    }
-    
-    void ReturnToTitle()
-    {
-        // 恢复时间（防止如果在顿帧期间按了返回，导致下一个场景时间依然是停止的）
-        Time.timeScale = 1f; 
-        
-        // 假设你的标题场景名字叫 "TitleScene"
-        // 你也可以用场景的 Index 数字，比如 SceneManager.LoadScene(0);
-        SceneManager.LoadScene(titleSceneName); 
     }
 }
