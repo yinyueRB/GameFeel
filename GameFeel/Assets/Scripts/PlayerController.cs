@@ -6,6 +6,19 @@ public class PlayerController : MonoBehaviour
     [Header("Game Control")]
     public bool canAct = false; // 控制玩家能否行动的开关
     
+    [Header("Animation Settings")]
+    public Animator anim; // 动画组件
+
+    public string animIdleName;   
+    public string animShootName;  
+    public string animFakeName;   
+    public string animDodgeName;  
+    public string animDeadName;
+    
+    [Header("Bullet VFX")]
+    public Animator bulletAnim;   // 关联子弹的Animator
+    public string bulletAnimName; // 子弹动画的名字
+    
     [Header("Frame Data (时间/秒)")]
     public float shootStartup = 0.3f;
     public float shootRecovery = 0.5f;
@@ -48,8 +61,6 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        UpdateVisuals(); 
-
         // 如果自己死了，或者对手死了（回合结束），就不再接收输入和处理状态
         if (!canAct || currentState == PlayerState.Dead || (opponent != null && opponent.currentState == PlayerState.Dead)) return;
 
@@ -106,14 +117,17 @@ public class PlayerController : MonoBehaviour
             case ActionType.Shoot:
                 currentState = PlayerState.Startup;
                 stateTimer = shootStartup;
+                anim.Play(animShootName); // 【新增】播放开枪动画
                 break;
             case ActionType.Fake:
                 currentState = PlayerState.Startup;
                 stateTimer = fakeStartup;
+                anim.Play(animFakeName);  // 【新增】播放假动作动画
                 break;
             case ActionType.Dodge:
                 currentState = PlayerState.Active; 
                 stateTimer = dodgeInvincible;
+                anim.Play(animDodgeName); // 【新增】播放闪避动画
                 break;
         }
     }
@@ -128,7 +142,11 @@ public class PlayerController : MonoBehaviour
             {
                 stateTimer = 0.1f; 
                 
-                // [新增] 开火瞬间，攻击对手！
+                if (bulletAnim != null)
+                {
+                    bulletAnim.Play(bulletAnimName, -1, 0f); // -1, 0f 意思是每次都从头(0秒)开始播放
+                }
+                
                 if (opponent != null)
                 {
                     opponent.ReceiveAttack();
@@ -151,6 +169,7 @@ public class PlayerController : MonoBehaviour
         {
             currentState = PlayerState.Idle;
             currentAction = ActionType.None;
+            anim.Play(animIdleName);
         }
     }
 
@@ -197,7 +216,9 @@ public class PlayerController : MonoBehaviour
         currentState = PlayerState.Idle;
         currentAction = ActionType.None;
         stateTimer = 0f;
-        bufferedAction = ActionType.None; // 清除可能残留的错误缓冲
+        bufferedAction = ActionType.None;
+        
+        anim.Play(animIdleName);
 
         // （后续可以在这里加入屏幕闪光、时停顿帧等极具冲击力的 Game Feel 特效）
     }
@@ -207,35 +228,12 @@ public class PlayerController : MonoBehaviour
         Debug.Log("<color=red>" + gameObject.name + " 被击杀了！(Kill!)</color>");
         currentState = PlayerState.Dead;
         currentAction = ActionType.None;
-
-        // 报告裁判有人死了！
+        
+        anim.Play(animDeadName);
+        
         if (GameManager.Instance != null)
         {
             GameManager.Instance.OnPlayerKilled(this);
-        }
-    }
-
-    void UpdateVisuals()
-    {
-        if (currentState == PlayerState.Idle) sr.color = Color.white;
-        else if (currentState == PlayerState.Startup) 
-        {
-            sr.color = currentAction == ActionType.Shoot ? Color.yellow : new Color(1f, 0.8f, 0f); 
-        }
-        else if (currentState == PlayerState.Active)
-        {
-            if (currentAction == ActionType.Shoot) sr.color = Color.red; 
-            else if (currentAction == ActionType.Fake) sr.color = Color.white; 
-            else if (currentAction == ActionType.Dodge) sr.color = Color.blue; 
-        }
-        else if (currentState == PlayerState.Recovery)
-        {
-            sr.color = Color.gray; 
-        }
-        // 死亡变成黑色
-        else if (currentState == PlayerState.Dead)
-        {
-            sr.color = Color.black;
         }
     }
     
@@ -247,5 +245,7 @@ public class PlayerController : MonoBehaviour
         stateTimer = 0f;
         bufferedAction = ActionType.None;
         canAct = false; 
+        
+        if (anim != null) anim.Play(animIdleName);
     }
 }
